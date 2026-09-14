@@ -2,11 +2,13 @@
 
 ## Sobre a atividade
 
-Nesta atividade foi desenvolvido um pipeline de Data Lake para trabalhar com dados de vendas de ingressos utilizando serviços da AWS.
+Nesta atividade eu desenvolvi um pipeline de Data Lake para trabalhar com dados de vendas de ingressos utilizando serviços da AWS.
 
 O pipeline foi desenvolvido em Python e executado no Google Colab, utilizando o Amazon S3 para armazenamento dos dados e o Amazon Athena para consulta e validação.
 
-A estrutura foi organizada seguindo as camadas Raw, Silver e Gold, além de uma área de quarentena para os registros que apresentaram problemas nas validações.
+Organizei a estrutura seguindo as camadas Raw, Silver e Gold, além de uma área de quarentena para os registros que apresentaram problemas nas validações.
+
+---
 
 ## Tecnologias utilizadas
 
@@ -18,9 +20,13 @@ A estrutura foi organizada seguindo as camadas Raw, Silver e Gold, além de uma 
 - Boto3
 - Parquet
 
-## O que foi realizado
+As credenciais da AWS foram digitadas via `getpass`, pra não ficarem salvas no notebook nem expostas no repositório.
 
-O pipeline contempla as seguintes etapas:
+---
+
+## O que foi feito
+
+O pipeline passa pelas seguintes etapas:
 
 1. Geração dos dados de compradores, eventos e vendas;
 2. Inserção de algumas anomalias nos dados de vendas;
@@ -32,33 +38,43 @@ O pipeline contempla as seguintes etapas:
 8. Criação da camada Gold com os dados agregados;
 9. Criação das tabelas externas no Athena;
 10. Registro das partições;
-11. Realização das consultas de auditoria e validação.
+11. Consultas de auditoria e validação.
+
+---
 
 ## Dados gerados
 
-Foram utilizados:
-- 500 compradores;
-- 50 eventos;
-- 2.000 vendas de ingressos.
+Usei:
 
-Foram inseridas anomalias nas vendas para testar as regras de qualidade dos dados.
+- **500** compradores;
+- **50** eventos;
+- **2.000** vendas de ingressos.
 
-Após as validações:
-- 1.694 registros foram considerados válidos;
-- 306 registros foram enviados para a quarentena.
+Inseri anomalias propositalmente nas vendas pra testar as regras de qualidade dos dados.
+
+Depois das validações:
+
+- **1.694** registros ficaram válidos;
+- **306** registros foram para a quarentena.
+
+---
 
 ## Regras de Data Quality
 
-Foram utilizadas as seguintes validações:
-- A quantidade de ingressos deve ser maior que zero;
-- O `comprador_id` deve existir na tabela de compradores;
-- O `evento_id` deve existir na tabela de eventos.
+As validações aplicadas foram:
 
-Os registros que não atenderam às regras foram armazenados em formato JSON na área de quarentena, junto com o motivo da rejeição.
+- A quantidade de ingressos precisa ser maior que zero;
+- O `comprador_id` precisa existir na tabela de compradores;
+- O `evento_id` precisa existir na tabela de eventos.
+
+Os registros que não passaram nessas regras foram salvos em formato JSON na área de quarentena, junto com o motivo da rejeição.
+
+---
 
 ## Estrutura do Data Lake
 
-A estrutura criada no Amazon S3 foi organizada da seguinte forma:
+A estrutura que criei no Amazon S3 ficou assim:
+
 ```text
 s3://datalake-amanda-10781761/
 │
@@ -85,85 +101,111 @@ s3://datalake-amanda-10781761/
 └── athena-results/
 ```
 
-Camada Raw
+### Camada Raw
 
-Os dados originais foram armazenados em formato CSV no S3 e organizados por data de ingestão utilizando o padrão de particionamento Hive:
+Os dados originais foram armazenados em formato CSV no S3 e organizados por data de ingestão, usando o padrão de particionamento Hive:
+
 ingest_date=YYYY-MM-DD
 
-Camada Silver
 
-Na camada Silver foram utilizados somente os registros válidos.
-Os dados de vendas foram enriquecidos com as informações dos compradores e dos eventos por meio de JOIN.
-Também foi calculado o campo:
+### Camada Silver
+
+Na camada Silver usei somente os registros válidos.
+
+Enriqueci os dados de vendas com as informações dos compradores e dos eventos através de JOIN.
+
+Também calculei o campo:
+
 valor_total = quantidade * preco_ingresso
 
-Os dados foram armazenados em formato Parquet.
 
-Camada Gold
+Os dados foram salvos em formato Parquet.
 
-Na camada Gold os dados foram agregados por estado e categoria do evento.
+### Camada Gold
 
-Foram calculadas as seguintes métricas:
+Na camada Gold agrupei os dados por estado e categoria do evento.
 
-total de vendas;
-total de ingressos;
-valor total vendido;
-ticket médio.
+Calculei as seguintes métricas:
 
-Os dados também foram armazenados em formato Parquet.
+- total de vendas;
+- total de ingressos;
+- valor total vendido;
+- ticket médio.
 
-Amazon Athena
+Os dados também foram salvos em formato Parquet.
 
-Foi criado o banco de dados:
+---
+
+## Amazon Athena
+
+Criei o banco de dados:
 
 datalake_db_datalake_amanda_10781761
 
+
 E as seguintes tabelas:
 
-raw_compradores
-raw_eventos
-raw_vendas_ingressos
-quarentena_vendas
-silver_fato_vendas_ingressos
-gold_vendas_uf_categoria
+- `raw_compradores`
+- `raw_eventos`
+- `raw_vendas_ingressos`
+- `quarentena_vendas`
+- `silver_fato_vendas_ingressos`
+- `gold_vendas_uf_categoria`
 
-As partições foram registradas utilizando o comando MSCK REPAIR TABLE.
+As partições foram registradas com o comando `MSCK REPAIR TABLE`.
 
-Auditoria no Athena
+---
 
-Para validar os arquivos da camada Raw, foi utilizada a consulta com as pseudo-colunas $path e $file_size:
+## Auditoria no Athena
 
+### Metadados dos arquivos
+
+Para validar os arquivos da camada Raw, usei a consulta com as pseudo-colunas `$path` e `$file_size`:
+
+```sql
 SELECT
     "$path" AS arquivo,
     "$file_size" AS tamanho_bytes
 FROM raw_vendas_ingressos
 LIMIT 10;
+```
 
-O resultado apresentou o caminho do arquivo no S3 e seu tamanho em bytes.
+O resultado mostrou o caminho do arquivo no S3 e o tamanho em bytes de cada um.
 
 Evidência - metadados
 
-Conciliação dos dados
+![Consulta de metadados no Athena](evidencias/metadados.png)
 
-Também foi realizada uma consulta para verificar se a quantidade de registros da Raw correspondia à soma dos registros processados na Silver e enviados para a quarentena.
+### Conciliação dos dados
+
+Também fiz uma consulta pra conferir se a quantidade de registros da Raw batia com a soma dos registros processados na Silver e enviados pra quarentena.
 
 Resultado:
 
-Raw: 2.000
-Silver: 1.694
-Quarentena: 306
+| Camada | Registros |
+|---|---|
+| Raw | 2.000 |
+| Silver | 1.694 |
+| Quarentena | 306 |
 
 1.694 + 306 = 2.000
 
+
 Integridade: OK
+
 Evidência - conciliação
 
-Como executar
-Abrir o notebook no Google Colab;
-Configurar as credenciais temporárias da AWS;
-Informar a região utilizada;
-Executar as células do notebook em ordem;
-Conferir a criação dos arquivos e partições no S3;
-Conferir as tabelas e consultas no Athena.
+![Conciliação Raw x Silver x Quarentena](evidencias/conciliacao.png)
+
+---
+
+## Como executar
+
+1. Abrir o notebook no Google Colab;
+2. Configurar as credenciais temporárias da AWS;
+3. Informar a região utilizada;
+4. Executar as células do notebook em ordem;
+5. Conferir a criação dos arquivos e partições no S3;
+6. Conferir as tabelas e consultas no Athena.
 
 As credenciais da AWS não fazem parte deste repositório.
